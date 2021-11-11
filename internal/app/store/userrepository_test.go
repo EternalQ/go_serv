@@ -19,3 +19,19 @@ func TestUserRepository_Create(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, u)
 }
+
+func TestUserRepository_FindByEmail(t *testing.T) {
+	s, teardow := store.TestStore(t, databaseURL)
+	defer teardow("users")
+
+	email := "example@example.net"
+	_, err := s.User().FindByEmail(email)
+	assert.Error(t, err)
+
+	s.User().Create(&model.User{
+		Email: "example@example.net",
+	})
+	u, err := s.User().FindByEmail(email)
+	assert.NoError(t, err)
+	assert.NotNil(t, u)
+}
