@@ -8,30 +8,94 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestUserRepository_Create(t *testing.T) {
-	s, teardow := store.TestStore(t, databaseURL)
-	defer teardow("users")
+func TestUser_Validate(t *testing.T) {
+	testCases := []struct {
+		name    string
+		u       func() *model.User
+		isValid bool
+	}{
+		{
+			name: "valid",
+			u: func() *model.User {
+				return model.TestUser(t)
+			},
+			isValid: true,
+		},
+		{
+			name: "empty email",
+			u: func() *model.User {
+				u := model.TestUser(t)
+				u.Email = ""
+				
+				return u
+			},
+			isValid: false,
+		},
+		{
+			name: "invalid email",
+			u: func() *model.User {
+				u := model.TestUser(t)
+				u.Email = "email"
+				
+				return u
+			},
+			isValid: false,
+		},
+		{
+			name: "empty password",
+			u: func() *model.User {
+				u := model.TestUser(t)
+				u.Password = ""
+				
+				return u
+			},
+			isValid: false,
+		},
+		{
+			name: "short password",
+			u: func() *model.User {
+				u := model.TestUser(t)
+				u.Password = "short"
+				
+				return u
+			},
+			isValid: false,
+		},
+	}
 
-	u, err := s.User().Create(&model.User{
-		Email: "example@example.net",
-	})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.isValid {
+				assert.NoError(t, tc.u().Validate())
+			} else {
+				assert.Error(t, tc.u().Validate())
+			}
+		})
+	}
+}
+
+func TestUserRepository_Create(t *testing.T) {
+	s, teardown := store.TestStore(t, databaseURL)
+	defer teardown("users")
+
+	u, err := s.User().Create(model.TestUser(t))
 
 	assert.NoError(t, err)
 	assert.NotNil(t, u)
 }
 
 func TestUserRepository_FindByEmail(t *testing.T) {
-	s, teardow := store.TestStore(t, databaseURL)
-	defer teardow("users")
+	s, teardown := store.TestStore(t, databaseURL)
+	defer teardown("users")
 
 	email := "example@example.net"
 	_, err := s.User().FindByEmail(email)
 	assert.Error(t, err)
 
-	s.User().Create(&model.User{
-		Email: "example@example.net",
-	})
-	u, err := s.User().FindByEmail(email)
+	u := model.TestUser(t)
+	u.Email = "example@example.net"
+	s.User().Create(u)
+	u, err = s.User().FindByEmail(email)
 	assert.NoError(t, err)
 	assert.NotNil(t, u)
 }
