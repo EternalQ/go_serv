@@ -1,19 +1,16 @@
-package sqlstore_test
+package teststore_test
 
 import (
 	"go_serv/internal/app/model"
 	"go_serv/internal/app/store"
-	"go_serv/internal/app/store/sqlstore"
+	"go_serv/internal/app/store/teststore"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestUserRepository_Create(t *testing.T) {
-	db, teardown := sqlstore.TestDB(t, databaseURL)
-	defer teardown("users")
-
-	s := sqlstore.New(db)
+	s := teststore.New()
 
 	u := model.TestUser(t)
 
@@ -22,10 +19,7 @@ func TestUserRepository_Create(t *testing.T) {
 }
 
 func TestUserRepository_FindByEmail(t *testing.T) {
-	db, teardown := sqlstore.TestDB(t, databaseURL)
-	defer teardown("users")
-
-	s := sqlstore.New(db)
+	s := teststore.New()
 
 	email := "example@example.net"
 	_, err := s.User().FindByEmail(email)

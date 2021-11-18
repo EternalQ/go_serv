@@ -1,7 +1,9 @@
 package sqlstore
 
 import (
+	"database/sql"
 	"go_serv/internal/app/model"
+	"go_serv/internal/app/store"
 )
 
 type UserRepository struct {
@@ -26,9 +28,14 @@ func (r *UserRepository) Create(u *model.User) error {
 
 func (r *UserRepository) FindByEmail(email string) (*model.User, error) {
 	u := &model.User{}
-	if err := r.store.db.
-		QueryRow("select id, email, encrypted_password from users where email = $1", email).
-		Scan(&u.ID, &u.Email, &u.EncryptedPassword); err != nil {
+	if err := r.store.db.QueryRow(
+		"select id, email, encrypted_password from users where email = $1",
+		email,
+	).Scan(&u.ID, &u.Email, &u.EncryptedPassword); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, store.ErrRecordNotFound
+		}
+
 		return nil, err
 	}
 
