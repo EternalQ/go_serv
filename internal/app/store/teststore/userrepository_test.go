@@ -26,7 +26,7 @@ func TestUserRepository_FindByEmail(t *testing.T) {
 	assert.EqualError(t, err, store.ErrRecordNotFound.Error())
 
 	u := model.TestUser(t)
-	u.Email = "example@example.net"
+	u.Email = email
 	s.User().Create(u)
 	u, err = s.User().FindByEmail(email)
 	assert.NoError(t, err)

@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"go_serv/internal/app/server"
+	"go_serv/internal/app/apiserver"
 	"log"
 
 	"github.com/BurntSushi/toml"
