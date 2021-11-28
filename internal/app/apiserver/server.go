@@ -4,18 +4,22 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"go_serv/internal/app/model"
 	"go_serv/internal/app/store"
 	"net/http"
+	"time"
 
+	"github.com/google/uuid"
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
+	"github.com/sirupsen/logrus"
 )
 
 const (
 	sessionName        = "go-serv"
-	ctxUserKey  ctxKey = iota
+	ctxKeyUser  ctxKey = iota
+	ctxKeyRequestID
 )
 
 var (
@@ -27,6 +31,7 @@ type ctxKey int16
 
 type server struct {
 	router       *mux.Router
+	logger       *logrus.Logger
 	store        store.Store
 	sessionStore sessions.Store
 }
@@ -34,6 +39,7 @@ type server struct {
 func newServer(store store.Store, sessionsStore sessions.Store) *server {
 	s := &server{
 		router:       mux.NewRouter(),
+		logger:       logrus.New(),
 		store:        store,
 		sessionStore: sessionsStore,
 	}
@@ -49,19 +55,53 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) configureRouter() {
-	s.router.HandleFunc("/test", func(rw http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(rw, "test")
-	})
-
+	s.router.Use(s.setRequestID)
+	s.router.Use(s.logRequest)
+	s.router.Use(handlers.CORS(handlers.AllowedOrigins([]string{"*"})))
 	s.router.HandleFunc("/users", s.handleCreateUser()).Methods("POST")
 	s.router.HandleFunc("/sessions", s.handleCreateSession()).Methods("POST")
 
-	privat := s.router.NewRoute().Subrouter()
-	privat.PathPrefix("/private")
+	privat := s.router.PathPrefix("/private").Subrouter()
 	privat.Use(s.authenticateUser)
-
+	privat.HandleFunc("/curruser", s.handleCurrentUser()).Methods("GET")
 }
 
+func (s *server) logRequest(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		logger := s.logger.WithFields(logrus.Fields{
+			"remote_addr": r.RemoteAddr,
+			"request_id":  r.Context().Value(ctxKeyRequestID),
+		})
+
+		logger.Infof("started %s %s", r.Method, r.RequestURI)
+
+		start := time.Now()
+		customRW := &responseWriter{
+			rw,
+			http.StatusOK,
+		}
+		next.ServeHTTP(customRW, r)
+
+		logger.Infof(
+			"completed with %d (%s) in %v",
+			customRW.code,
+			http.StatusText(customRW.code),
+			time.Since(start),
+		)
+	})
+}
+
+//Generate id for request to identify it later
+func (s *server) setRequestID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		id := uuid.New().String()
+		rw.Header().Set("X-Request-ID", id)
+
+		next.ServeHTTP(rw, r.WithContext(context.WithValue(r.Context(), ctxKeyRequestID, id)))
+	})
+}
+
+//Save user's id in cookie
 func (s *server) authenticateUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		session, err := s.sessionStore.Get(r, sessionName)
@@ -81,8 +121,14 @@ func (s *server) authenticateUser(next http.Handler) http.Handler {
 			s.error(rw, r, http.StatusUnauthorized, errNotAuthenticated)
 		}
 
-		next.ServeHTTP(rw, r.WithContext(context.WithValue(r.Context(), ctxUserKey, u)))
+		next.ServeHTTP(rw, r.WithContext(context.WithValue(r.Context(), ctxKeyUser, u)))
 	})
+}
+
+func (s *server) handleCurrentUser() http.HandlerFunc {
+	return func(rw http.ResponseWriter, r *http.Request) {
+		s.respond(rw, r, http.StatusOK, r.Context().Value(ctxKeyUser).(*model.User))
+	}
 }
 
 func (s *server) handleCreateUser() http.HandlerFunc {

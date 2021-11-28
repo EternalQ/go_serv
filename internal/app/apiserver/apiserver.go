@@ -19,7 +19,15 @@ func Start(config *Config) error {
 	sessionStore := sessions.NewCookieStore([]byte(config.SessionKey))
 	server := newServer(store, sessionStore)
 
-	return http.ListenAndServe(config.BindAddr, server)
+	server.logger.Info("starting server")
+
+	err = http.ListenAndServe(config.BindAddr, server)
+	if err != nil {
+		server.logger.Errorf("error occured: %s", err.Error())
+		return err
+	}
+
+	return nil
 }
 
 func newDB(dburl string) (*sql.DB, error) {
