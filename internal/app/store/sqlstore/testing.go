@@ -1,7 +1,10 @@
 package sqlstore
 
 import (
+	"bytes"
 	"database/sql"
+	"fmt"
+	"log"
 	"strings"
 	"testing"
 )
@@ -20,7 +23,11 @@ func TestDB(t *testing.T, databaseURL string) (*sql.DB, func(...string)) {
 
 	return db, func(tables ...string) {
 		if len(tables) > 0 {
-			db.Exec("truncate %s cascade", strings.Join(tables, ", "))
+			b := &bytes.Buffer{}
+			fmt.Fprintf(b, "truncate %s cascade", strings.Join(tables, ", "))
+			if _, err := db.Exec(b.String()); err!=nil{
+				log.Fatal(err, b.String())
+			}
 		}
 
 		db.Close()
